@@ -1,5 +1,5 @@
 # 使用 Python 3.12.7 Alpine 作为基础镜像
-FROM python:3.12.7-alpine
+FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/python:3.12.7-alpine
 
 # 设置维护者信息
 LABEL maintainer="ckf10000@sina.com"
