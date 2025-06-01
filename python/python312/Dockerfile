@@ -12,4 +12,4 @@ LABEL maintainer="ckf10000@sina.com"
 RUN apk update && \
     apk add --no-cache gcc g++ libffi-dev openssl-dev libxml2-dev libxslt-dev build-base musl-dev wget curl && \
     # 升级 pip 到最新版
-    pip install --root-user-action=ignore -U pip
+    pip install --root-user-action=ignore -U pip  -i https://mirrors.huaweicloud.com/repository/pypi/simple
