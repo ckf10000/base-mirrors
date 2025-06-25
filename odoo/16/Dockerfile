@@ -17,4 +17,6 @@ RUN apt-get update && \
     apt-get install -y postgresql-server-dev-all gcc g++ make libsass-dev libffi-dev libxml2-dev libxslt-dev musl-dev wget curl && \
     rm -rf /var/lib/apt/lists/* && \
     pip install --root-user-action=ignore -U pip -i https://mirrors.huaweicloud.com/repository/pypi/simple && \
-    pip install --use-pep517 --no-build-isolation $WORKDIR/odoo-16.0.20250606-py3-none-any.whl
+    pip install --use-pep517 --no-build-isolation --root-user-action=ignore $WORKDIR/odoo-16.0.20250606-py3-none-any.whl && \
+    pip install Werkzeug==1.0.1 && \
+    rm -rf /root/.cache/pip
