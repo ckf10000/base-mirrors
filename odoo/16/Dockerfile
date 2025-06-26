@@ -14,16 +14,73 @@ ENV ODOO_PACKAGE=$WORKDIR/odoo-16.0.20250606-py3-none-any.whl
 
 # 更新 apt 包索引并安装依赖工具
 RUN apt-get update && \
-    apt-get install -y postgresql-server-dev-all gcc g++ make libsass-dev libffi-dev libxml2-dev libxslt-dev musl-dev wget curl && \
+    apt-get install -y --no-install-recommends \
+    postgresql-server-dev-all \
+    gcc \
+    g++ \
+    make \
+    libsass-dev \
+    libffi-dev \
+    libxml2-dev \
+    libxslt-dev \
+    musl-dev \
+    wget  \
+    curl
+
+# 安装字体依赖
+RUN apt-get install -y --no-install-recommends \
+    ca-certificates \
+    libx11-6 \
+    libxcb1 \
+    libxext6 \
+    libxrender1 \
+    libjpeg62-turbo \
+    fonts-wqy-zenhei \
+    fonts-wqy-microhei \
+    xfonts-75dpi \
+    xfonts-base \
+    ttf-wqy-zenhei \
+    ttf-wqy-microhei \
+    fontconfig && \
+    fc-cache -f
+
+# 安装wkhtmltopdf
+RUN curl -o wkhtmltox.deb -SL https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6.1-3/wkhtmltox_0.12.6.1-3.bookworm_amd64.deb && \
+    dpkg -i wkhtmltox.deb || true && \
+    apt-get install -f -y --no-install-recommends && \
+    rm -rf wkhtmltox.deb
+
+# 验证
+RUN wkhtmltopdf --version && \
+    echo "Installation verified."
+
+# 清理
+RUN apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
+# 创建插件目录
 RUN mkdir -p $ADDONSDIR
+
+# 创建odoo用户和用户组
+RUN groupadd -g 1000 odoo && \
+    useradd -u 1000 -g odoo -d $WORKDIR -s /bin/bash odoo && \
+    mkdir -p $WORKDIR && \
+    chown odoo:odoo $WORKDIR
 
 COPY ./odoo-16.0.20250606-py3-none-any.whl $ODOO_PACKAGE
 COPY ./addons $ADDONSDIR
 
+# 修正文件权限
+RUN chown -R odoo:odoo $WORKDIR && \
+    chmod -R 755 $WORKDIR
+
 # 安装python相关依赖包
-RUN pip install --root-user-action=ignore -U pip -i https://mirrors.huaweicloud.com/repository/pypi/simple && \
+RUN pip install --use-pep517 --no-build-isolation --root-user-action=ignore -U pip -i https://mirrors.huaweicloud.com/repository/pypi/simple && \
     pip install --use-pep517 --no-build-isolation --root-user-action=ignore $ODOO_PACKAGE && \
-    pip install Werkzeug==1.0.1 && \
+    pip install --use-pep517 --no-build-isolation --root-user-action=ignore Werkzeug==1.0.1 -i https://mirrors.huaweicloud.com/repository/pypi/simple && \
+    pip install --use-pep517 --no-build-isolation --root-user-action=ignore pyinotify -i https://mirrors.huaweicloud.com/repository/pypi/simple && \
     rm -rf /root/.cache/pip
+
+# 切换到odoo用户运行
+USER odoo
+WORKDIR $WORKDIR
