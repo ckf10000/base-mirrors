@@ -44,11 +44,13 @@ RUN apt-get install -y --no-install-recommends \
     fontconfig && \
     fc-cache -f
 
+
+
 # 安装wkhtmltopdf
-RUN curl -o wkhtmltox.deb -SL https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6.1-3/wkhtmltox_0.12.6.1-3.bookworm_amd64.deb && \
-    dpkg -i wkhtmltox.deb || true && \
+COPY ./wkhtmltox_0.12.6.1-3.bookworm_amd64.deb ./wkhtmltox.deb
+RUN dpkg -i ./wkhtmltox.deb || true && \
     apt-get install -f -y --no-install-recommends && \
-    rm -rf wkhtmltox.deb
+    rm -rf ./wkhtmltox.deb
 
 # 验证
 RUN wkhtmltopdf --version && \
