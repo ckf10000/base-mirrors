@@ -78,7 +78,7 @@ RUN chown -R odoo:odoo $WORKDIR && \
 RUN pip install --use-pep517 --no-build-isolation --root-user-action=ignore -U pip -i https://mirrors.huaweicloud.com/repository/pypi/simple && \
     pip install --use-pep517 --no-build-isolation --root-user-action=ignore $ODOO_PACKAGE && \
     pip install --use-pep517 --no-build-isolation --root-user-action=ignore Werkzeug==1.0.1 -i https://mirrors.huaweicloud.com/repository/pypi/simple && \
-    pip install --use-pep517 --no-build-isolation --root-user-action=ignore pyinotify -i https://mirrors.huaweicloud.com/repository/pypi/simple && \
+    pip install --use-pep517 --no-build-isolation --root-user-action=ignore inotify==0.2.10 -i https://mirrors.huaweicloud.com/repository/pypi/simple && \
     rm -rf /root/.cache/pip
 
 # 切换到odoo用户运行
