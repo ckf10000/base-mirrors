@@ -24,6 +24,7 @@ RUN apt-get update && \
     libxml2-dev \
     libxslt-dev \
     musl-dev \
+    gosu \
     wget  \
     curl
 
