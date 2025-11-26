@@ -11,8 +11,8 @@
 """
 import os
 import sys
-import time
 import importlib
+import threading
 from watchdog.observers import Observer
 from pyxxl import ExecutorConfig, PyxxlRunner
 from watchdog.events import FileSystemEventHandler
@@ -23,19 +23,20 @@ jobs_path = "jobs"
 # 1. 配置 Pyxxl 执行器（官方规范）
 # ---------------------------------------------------
 config = ExecutorConfig(
-    xxl_admin_baseurl=os.getenv("XXL_JOB_ADMIN_ADDRESS"),
-    executor_app_name=os.getenv("XXL_JOB_EXECUTOR_APPNAME", "python-executor"),
+    xxl_admin_baseurl=os.getenv("XXL_JOB_ADMIN_ADDRESS", "http://192.168.3.240:18070/xxl-job-admin/api/"),
+    executor_app_name=os.getenv("XXL_JOB_EXECUTOR_APPNAME", "python-executor-local"),
 
     # 官方推荐字段名称
     executor_listen_host="0.0.0.0",
     executor_listen_port=int(os.getenv("XXL_JOB_EXECUTOR_PORT", 9999)),
 
     # 这里指定 Admin 可访问的地址（必须是真实 IP + 端口 或域名）
-    executor_url=os.getenv("XXL_JOB_EXECUTOR_URL"),
+    executor_url=os.getenv("XXL_JOB_EXECUTOR_URL", "http://192.168.3.86:9999/"),
     # 执行器绑定的http服务的url,xxl-admin通过这个host来回调pyxxl执行器.
     # Default: "http://{executor_listen_host}:{executor_listen_port}"
 
-    access_token=os.getenv("XXL_JOB_ACCESS_TOKEN", ""),
+    access_token=os.getenv("XXL_JOB_ACCESS_TOKEN", "Abc123456"),
+    executor_log_path="./logs/python-executor.log",
 
     # 建议开启 debug，便于定位注册成功与否
     debug=True,
@@ -84,6 +85,7 @@ def auto_load_jobs():
 # ---------------------------------------------------
 class JobFileEventHandler(FileSystemEventHandler):
     def on_modified(self, event):
+        print(f"[watchdog] 检测目录<{jobs_path}>文件状态中....")
         # 只在 `.py` 文件被修改时重新加载任务
         if event.src_path.endswith(".py") and not event.src_path.endswith("__init__.py"):
             print(f"[watchdog] 文件已修改: {event.src_path}")
@@ -105,11 +107,10 @@ def start_job_watchdog():
     observer.start()
     print(f"[watchdog] 开始监控 {jobs_path} 目录变化...")
     try:
-        while True:
-            time.sleep(1)
+        observer.join()  # 直接等待 observer 线程结束
     except KeyboardInterrupt:
-        observer.stop()
-    observer.join()
+        observer.stop()  # 捕获 Ctrl+C 停止监控
+        observer.join()  # 确保 monitor 线程正确结束
 
 
 # ---------------------------------------------------
@@ -120,8 +121,10 @@ if __name__ == "__main__":
     print("[pyxxl] 扫描并加载 jobs 目录中的任务...")
     auto_load_jobs()
 
-    # 启动 watchdog 监控文件变化
-    start_job_watchdog()
+    # 启动 watchdog 监控文件变化的线程
+    # start_job_watchdog()
+    watchdog_thread = threading.Thread(target=start_job_watchdog, daemon=True)
+    watchdog_thread.start()
 
     # 启动执行器
     print("[pyxxl] 启动 XXL-JOB Python 执行器...")
