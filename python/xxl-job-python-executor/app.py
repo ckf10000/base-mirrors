@@ -56,16 +56,111 @@ executor = PyxxlRunner(config)
 def load_job_module(module_path):
     """通用加载任务模块并注册的函数"""
     try:
+        module_name = module_path.split('.')[-1]
+
+        # 查看 JobHandler 类的属性
+        job_handler = executor.handler
+        # 步骤1：取消注册旧任务
+        if hasattr(job_handler, '_handlers'):
+            handlers_dict = job_handler._handlers
+
+            if isinstance(handlers_dict, dict):
+                logger.info(f"[pyxxl] 当前注册的任务数量: {len(handlers_dict)}")
+
+                if module_name in handlers_dict:
+                    # 保存旧处理器信息（用于调试）
+                    old_handler = handlers_dict[module_name]
+                    logger.info(f"[pyxxl] 旧处理器信息: {type(old_handler)}")
+
+                    # 取消注册
+                    del handlers_dict[module_name]
+                    logger.info(f"[pyxxl] ✓ 已取消注册任务: {module_name}")
+
+                    # 验证取消注册
+                    if module_name not in handlers_dict:
+                        logger.info(f"[pyxxl] ✓ 取消注册验证成功")
+                    else:
+                        logger.error(f"[pyxxl] ✗ 取消注册验证失败")
+                else:
+                    logger.info(f"[pyxxl] 任务 {module_name} 未注册，直接进行新注册")
+            else:
+                logger.warning(f"[pyxxl] _handlers 不是字典: {type(handlers_dict)}")
+        else:
+            logger.warning(f"[pyxxl] 无法找到任务字典，跳过取消注册步骤")
+
+        # 步骤2：卸载模块
+        if module_path in sys.modules:
+            # 在卸载前尝试清理模块状态
+            old_module = sys.modules[module_path]
+
+            # 清理可能的模块级状态
+            if hasattr(old_module, '__pyxxl_cleanup__'):
+                try:
+                    old_module.__pyxxl_cleanup__()
+                    logger.info(f"[pyxxl] 执行模块清理函数")
+                except Exception as e:
+                    logger.warning(f"[pyxxl] 模块清理失败: {e}")
+
+            del sys.modules[module_path]
+            logger.info(f"[pyxxl] ✓ 已卸载模块: {module_path}")
+
+        # 步骤3：清除导入缓存
+        importlib.invalidate_caches()
+        logger.info(f"[pyxxl] 已清除导入缓存")
+
+        # 步骤4：重新导入模块
+        logger.info(f"[pyxxl] 重新导入模块: {module_path}")
         module = importlib.import_module(module_path)
 
+        # 步骤5：重新注册任务
         if hasattr(module, "register"):
-            module.register(executor)
-            logger.info(f"[pyxxl] 加载任务: {module_path}")
+            # 检查注册函数是否可调用
+            if callable(module.register):
+                module.register(executor)
+                logger.info(f"[pyxxl] ✓ 成功调用 register 函数")
+
+                # 步骤6：验证注册结果
+                if hasattr(job_handler, '_handlers') and isinstance(job_handler._handlers, dict):
+                    if module_name in job_handler._handlers:
+                        new_handler = job_handler._handlers[module_name]
+                        logger.info(f"[pyxxl] ✓ 任务注册成功，新处理器: {type(new_handler)}")
+                    else:
+                        logger.error(f"[pyxxl] ✗ 任务注册失败，任务未出现在处理器字典中")
+                else:
+                    logger.warning(f"[pyxxl] 无法验证注册结果")
+            else:
+                logger.error(f"[pyxxl] register 属性不可调用: {type(module.register)}")
         else:
             logger.warning(f"[pyxxl] {module_path} 未定义 register(executor)，跳过")
 
     except Exception as e:
-        logger.error(f"[pyxxl] 加载任务 {module_path} 失败: {e}")
+        logger.error(f"[pyxxl] 任务<{module_path}>注册失败，原因: {e}")
+
+
+def inspect_pyxxl_structure():
+    """查看 PyXXL 执行器的实际结构"""
+    logger.info("=== PyXXL 执行器结构分析 ===")
+
+    # 查看执行器类的属性
+    import pyxxl
+    executor_class = pyxxl.executor.Executor
+    class_attrs = [attr for attr in dir(executor_class) if not attr.startswith('__')]
+    logger.info(f"Executor类属性: {class_attrs}")
+
+    # 查看实例属性
+    instance_attrs = [attr for attr in dir(executor) if not attr.startswith('_')]
+    logger.info(f"执行器实例属性: {instance_attrs}")
+
+    # 特别查看字典类型的属性
+    for attr in dir(executor):
+        try:
+            value = getattr(executor, attr)
+            if isinstance(value, dict):
+                logger.info(f"字典属性 '{attr}': 包含 {len(value)} 个键")
+                if value:
+                    logger.info(f"  前几个键: {list(value.keys())[:3]}")
+        except (Exception,):
+            pass
 
 
 # ---------------------------------------------------
@@ -76,13 +171,29 @@ def auto_load_jobs():
         logger.warning("[pyxxl] jobs 目录不存在，跳过加载")
         return
 
+    # 先清空现有的处理器（避免重复注册错误）
+    job_handler = executor.handler
+    if hasattr(job_handler, '_handlers') and isinstance(job_handler._handlers, dict):
+        job_handler._handlers.clear()
+        logger.info(f"[pyxxl] 已清空所有任务处理器")
+
     for filename in os.listdir(jobs_path):
         if filename.endswith(".py") and filename != "__init__.py":
             module_name = filename[:-3]
             module_path = f"{jobs_path}.{module_name}"
 
-            # 调用通用加载任务函数
-            load_job_module(module_path)
+            try:
+                # 直接导入并注册，不先检查是否已存在
+                module = importlib.import_module(module_path)
+
+                if hasattr(module, "register"):
+                    module.register(executor)
+                    logger.info(f"[pyxxl] 加载任务: {module_path}")
+                else:
+                    logger.warning(f"[pyxxl] {module_path} 未定义 register(executor)，跳过")
+
+            except Exception as e:
+                logger.error(f"[pyxxl] 加载任务 {module_path} 失败: {e}")
 
 
 # ---------------------------------------------------
@@ -211,6 +322,8 @@ def watchdog_health_check():
 # 5. 启动 Pyxxl 执行器并启动监控
 # ---------------------------------------------------
 if __name__ == "__main__":
+    # logging.basicConfig(level=logging.DEBUG)
+    # inspect_pyxxl_structure()
     # 首先加载一次任务
     logger.info("[pyxxl] 扫描并加载 jobs 目录中的任务...")
     auto_load_jobs()
