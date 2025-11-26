@@ -11,13 +11,18 @@
 """
 import os
 import sys
+import logging
 import importlib
 import threading
+from time import sleep
+from threading import Lock, Timer
 from watchdog.observers import Observer
 from pyxxl import ExecutorConfig, PyxxlRunner
 from watchdog.events import FileSystemEventHandler
 
 jobs_path = "jobs"
+
+logger = logging.getLogger("pyxxl")
 
 # ---------------------------------------------------
 # 1. 配置 Pyxxl 执行器（官方规范）
@@ -55,20 +60,20 @@ def load_job_module(module_path):
 
         if hasattr(module, "register"):
             module.register(executor)
-            print(f"[pyxxl] 加载任务: {module_path}")
+            logger.info(f"[pyxxl] 加载任务: {module_path}")
         else:
-            print(f"[pyxxl] {module_path} 未定义 register(executor)，跳过")
+            logger.warning(f"[pyxxl] {module_path} 未定义 register(executor)，跳过")
 
     except Exception as e:
-        print(f"[pyxxl] 加载任务 {module_path} 失败: {e}")
+        logger.error(f"[pyxxl] 加载任务 {module_path} 失败: {e}")
 
 
 # ---------------------------------------------------
-# 2. 自动扫描 jobs/ 目录并调用 register(executor)
+# 3. 自动扫描 jobs/ 目录并调用 register(executor)
 # ---------------------------------------------------
 def auto_load_jobs():
     if not os.path.exists(jobs_path):
-        print("[pyxxl] jobs 目录不存在，跳过加载")
+        logger.warning("[pyxxl] jobs 目录不存在，跳过加载")
         return
 
     for filename in os.listdir(jobs_path):
@@ -83,58 +88,123 @@ def auto_load_jobs():
 # ---------------------------------------------------
 # 4. 使用 watchdog 动态监控目录变化并重新加载任务
 # ---------------------------------------------------
-class JobFileEventHandler(FileSystemEventHandler):
+class DebouncedJobFileEventHandler(FileSystemEventHandler):
+    def __init__(self, delay=2.0):  # 2秒防抖
+        self.delay = delay
+        self._timer = None
+        self._lock = Lock()
+        self._pending_events = set()
+        logger.info(f"[watchdog] 防抖事件处理器已初始化，防抖时间: {delay}秒")
+
+    def on_any_event(self, event):
+        """监控所有事件，用于调试"""
+        if not event.is_directory:
+            logger.info(f"[watchdog] 捕获事件: {event.event_type} - {event.src_path}")
+
+    def _process_events(self):
+        logger.info(f"[watchdog] 开始处理积压的事件")
+        with self._lock:
+            events = self._pending_events.copy()
+            self._pending_events.clear()
+            self._timer = None
+
+        logger.info(f"[watchdog] 需要处理 {len(events)} 个事件")
+        for event_path in events:
+            self._handle_single_event(event_path)
+
+    @staticmethod
+    def _handle_single_event(event_path):
+        logger.info(f"[watchdog] 处理单个事件: {event_path}")
+        if event_path.endswith(".py") and not event_path.endswith("__init__.py"):
+            if os.path.exists(event_path):
+                logger.info(f"[watchdog] 重新加载模块: {event_path}")
+                module_name = os.path.basename(event_path)[:-3]
+                module_path = f"{jobs_path}.{module_name}"
+
+                # 卸载模块
+                if module_path in sys.modules:
+                    del sys.modules[module_path]
+                    logger.info(f"[watchdog] 已卸载模块: {module_path}")
+
+                # 重新加载
+                try:
+                    load_job_module(module_path)
+                except Exception as e:
+                    logger.warning(f"[watchdog] 重新加载失败: {e}")
+            else:
+                logger.error(f"[watchdog] 文件不存在，跳过: {event_path}")
+
+    def _schedule_processing(self, event_path):
+        logger.info(f"[watchdog] 调度处理: {event_path}")
+        with self._lock:
+            self._pending_events.add(event_path)
+
+            if self._timer is not None:
+                self._timer.cancel()
+                logger.info(f"[watchdog] 取消之前的定时器")
+
+            self._timer = Timer(self.delay, self._process_events)
+            self._timer.start()
+            logger.info(f"[watchdog] 新定时器已启动，将在 {self.delay} 秒后处理")
+
     def on_modified(self, event):
-        print(f"[watchdog] 检测目录<{jobs_path}>文件状态中....")
-        # 只在 `.py` 文件被修改时重新加载任务
-        if event.src_path.endswith(".py") and not event.src_path.endswith("__init__.py"):
-            print(f"[watchdog] 文件已修改: {event.src_path}")
-            module_name = os.path.basename(event.src_path)[:-3]
-            module_path = f"{jobs_path}.{module_name}"
-
-            # 卸载并重新加载模块
-            if module_name in sys.modules:
-                del sys.modules[module_path]
-
-            # 调用通用加载任务函数
-            load_job_module(module_path)
+        logger.info(f"[watchdog] 文件修改事件: {event.src_path}")
+        if not event.is_directory and event.src_path.endswith(".py") and not event.src_path.endswith("__init__.py"):
+            logger.info(f"[watchdog] 检测到Python文件修改: {event.src_path}")
+            self._schedule_processing(event.src_path)
 
     def on_created(self, event):
-        # 处理新创建的 `.py` 文件
-        if event.src_path.endswith(".py") and not event.src_path.endswith("__init__.py"):
-            print(f"[watchdog] 新文件已创建: {event.src_path}")
-            module_name = os.path.basename(event.src_path)[:-3]
-            module_path = f"jobs.{module_name}"
-
-            # 调用通用加载任务函数
-            load_job_module(module_path)
+        logger.info(f"[watchdog] 文件创建事件: {event.src_path}")
+        if not event.is_directory and event.src_path.endswith(".py") and not event.src_path.endswith("__init__.py"):
+            logger.info(f"[watchdog] 检测到新Python文件: {event.src_path}")
+            self._schedule_processing(event.src_path)
 
     def on_deleted(self, event):
-        # 处理 `.py` 文件被删除时的逻辑
-        if event.src_path.endswith(".py") and not event.src_path.endswith("__init__.py"):
-            print(f"[watchdog] 文件已删除: {event.src_path}")
+        if not event.is_directory:
+            logger.info(f"[watchdog] 文件已删除: {event.src_path}")
             module_name = os.path.basename(event.src_path)[:-3]
             module_path = f"jobs.{module_name}"
 
-            # 如果模块在 sys.modules 中，卸载模块
             if module_path in sys.modules:
                 del sys.modules[module_path]
-                print(f"[watchdog] 模块 {module_name} 已从 sys.modules 中卸载")
-            else:
-                print(f"[watchdog] 模块 {module_name} 不在 sys.modules 中")
+                logger.info(f"[watchdog] 模块 {module_name} 已卸载")
 
 
 def start_job_watchdog():
-    event_handler = JobFileEventHandler()
+    logger.info(f"[watchdog] 初始化文件监控...")
+
+    # 检查监控目录是否存在
+    if not os.path.exists(jobs_path):
+        logger.warning(f"[watchdog] 警告: 监控目录 {jobs_path} 不存在!")
+        return
+
+    logger.info(f"[watchdog] 监控目录: {os.path.abspath(jobs_path)}")
+
+    event_handler = DebouncedJobFileEventHandler(delay=3.0)  # 3秒防抖
     observer = Observer()
-    observer.schedule(event_handler, jobs_path, recursive=False)
-    observer.start()
-    print(f"[watchdog] 开始监控 {jobs_path} 目录变化...")
+
     try:
-        observer.join()  # 直接等待 observer 线程结束
-    except KeyboardInterrupt:
-        observer.stop()  # 捕获 Ctrl+C 停止监控
-        observer.join()  # 确保 monitor 线程正确结束
+        observer.schedule(event_handler, jobs_path, recursive=False)
+        observer.start()
+        logger.info(f"[watchdog] 开始监控 {jobs_path} 目录变化...")
+
+        # 持续运行监控
+        while observer.is_alive():
+            sleep(1)
+
+    except Exception as e:
+        logger.error(f"[watchdog] 监控异常: {e}")
+    finally:
+        logger.error("[watchdog] 停止文件监控...")
+        observer.stop()
+        observer.join()
+
+
+def watchdog_health_check():
+    while True:
+        if not watchdog_thread.is_alive():
+            logger.error("Watchdog 线程已终止！")
+        sleep(10)
 
 
 # ---------------------------------------------------
@@ -142,14 +212,34 @@ def start_job_watchdog():
 # ---------------------------------------------------
 if __name__ == "__main__":
     # 首先加载一次任务
-    print("[pyxxl] 扫描并加载 jobs 目录中的任务...")
+    logger.info("[pyxxl] 扫描并加载 jobs 目录中的任务...")
     auto_load_jobs()
 
     # 启动 watchdog 监控文件变化的线程
     # start_job_watchdog()
-    watchdog_thread = threading.Thread(target=start_job_watchdog, daemon=True)
+    # 启动 watchdog（非守护线程）
+    watchdog_thread = threading.Thread(
+        target=start_job_watchdog,
+        name="watchdog-monitor",
+        daemon=False  # 必须设为非守护线程！
+    )
     watchdog_thread.start()
+    logger.info("文件监控线程已启动")
 
     # 启动执行器
-    print("[pyxxl] 启动 XXL-JOB Python 执行器...")
-    executor.run_executor()
+    logger.info("[pyxxl] 启动 XXL-JOB Python 执行器...")
+    try:
+        executor.run_executor()
+
+        # 在主线程启动后
+        health_check_thread = threading.Thread(
+            target=watchdog_health_check,
+            daemon=True
+        )
+        health_check_thread.start()
+    except KeyboardInterrupt:
+        logger.error("\n[pyxxl] 接收到中断信号，正在关闭...")
+    except Exception as e:
+        logger.error(f"[pyxxl] 执行器异常: {e}")
+    finally:
+        logger.error("[pyxxl] 执行器已关闭")
