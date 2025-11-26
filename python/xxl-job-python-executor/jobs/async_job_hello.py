@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 # ---------------------------------------------------------------------------------------------------------
-# ProjectName:  cronjob-1717
+# ProjectName:  xxl-job-python-executor
 # FileName:     async_job_hello.py
 # Description:  异步测试任务
 # Author:       ASUS

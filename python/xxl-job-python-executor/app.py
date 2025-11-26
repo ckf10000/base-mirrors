@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 # ---------------------------------------------------------------------------------------------------------
-# ProjectName:  cronjob-1717
+# ProjectName:  xxl-job-python-executor
 # FileName:     app.py
 # Description:  执行器的入口
 # Author:       ASUS
