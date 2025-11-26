@@ -99,6 +99,30 @@ class JobFileEventHandler(FileSystemEventHandler):
             # 调用通用加载任务函数
             load_job_module(module_path)
 
+    def on_created(self, event):
+        # 处理新创建的 `.py` 文件
+        if event.src_path.endswith(".py") and not event.src_path.endswith("__init__.py"):
+            print(f"[watchdog] 新文件已创建: {event.src_path}")
+            module_name = os.path.basename(event.src_path)[:-3]
+            module_path = f"jobs.{module_name}"
+
+            # 调用通用加载任务函数
+            load_job_module(module_path)
+
+    def on_deleted(self, event):
+        # 处理 `.py` 文件被删除时的逻辑
+        if event.src_path.endswith(".py") and not event.src_path.endswith("__init__.py"):
+            print(f"[watchdog] 文件已删除: {event.src_path}")
+            module_name = os.path.basename(event.src_path)[:-3]
+            module_path = f"jobs.{module_name}"
+
+            # 如果模块在 sys.modules 中，卸载模块
+            if module_path in sys.modules:
+                del sys.modules[module_path]
+                print(f"[watchdog] 模块 {module_name} 已从 sys.modules 中卸载")
+            else:
+                print(f"[watchdog] 模块 {module_name} 不在 sys.modules 中")
+
 
 def start_job_watchdog():
     event_handler = JobFileEventHandler()
