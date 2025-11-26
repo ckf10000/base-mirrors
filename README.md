@@ -16,5 +16,8 @@ python构建
 - docker buildx build -f ./Dockerfile -t my-python312:20250626 .
 
 
-OCR构建
-- docker buildx build -f ./Dockerfile -t ocr-python312:20251126 .
+xxl-job-python-executor构建
+- docker buildx build -f ./Dockerfile -t xxl-job-executor-python:latest .
+
+xxl-job-java-executor构建
+- docker buildx build -f ./Dockerfile -t xxl-job-executor-java:latest .
