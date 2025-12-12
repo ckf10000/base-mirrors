@@ -16,6 +16,9 @@ python构建
 - docker buildx build -f ./Dockerfile -t my-python312:20250626 .
 
 
+playwright构建
+- docker buildx build -f ./Dockerfile -t my-python3.12.9-slim:latest .
+
 xxl-job-python-executor构建
 - docker buildx build -f ./Dockerfile -t xxl-job-executor-python:latest .
 
