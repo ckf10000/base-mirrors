@@ -30,8 +30,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxml2-dev \
     libxtst6 \
     libxslt-dev \
-    openssl-dev \
-    build-base \
     ca-certificates \
     fonts-liberation \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
