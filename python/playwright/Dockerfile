@@ -40,4 +40,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN pip install --no-cache-dir playwright -i https://mirrors.huaweicloud.com/repository/pypi/simple &&  \
     # 升级 pip 到最新版
     pip install --no-cache-dir -U pip  -i https://mirrors.huaweicloud.com/repository/pypi/simple && \
+    pip install --no-cache-dir -U playwright-stealth  -i https://mirrors.huaweicloud.com/repository/pypi/simple && \
     playwright install chromium
