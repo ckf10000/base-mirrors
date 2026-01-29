@@ -2,7 +2,7 @@
 #                                第一阶段：开始
 ###############################################################################
 # 使用最小化的 Alpine 基础镜像，维护者信息
-FROM my-python3.12.7-alpine:latest AS build
+FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/mcr.microsoft.com/playwright/python:v1.56.0 AS build
 LABEL maintainer="ckf10000@sina.com"
 
 ###############################################################################
@@ -22,11 +22,13 @@ COPY ./ /app/
 # 安装依赖
 RUN pip install --use-pep517 --timeout 30 --root-user-action=ignore --user --no-cache-dir --no-warn-script-location -r /app/requirements.txt -i https://mirrors.huaweicloud.com/repository/pypi/simple
 
+
+
 ###############################################################################
 #                                第二阶段：开始
 ###############################################################################
 
-FROM my-python3.12.7-alpine:latest
+FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/mcr.microsoft.com/playwright/python:v1.56.0
 
 # 设置环境变量
 ENV LOCAL_PKG="/root/.local"
@@ -47,7 +49,13 @@ EXPOSE 9999
 ###############################################################################
 #                                   启动服务
 ###############################################################################
-
-# 启动 服务
 ENTRYPOINT ["python"]
 CMD ["app.py"]
+
+###############################################################################
+#                                健康检查
+###############################################################################
+
+# 健康检查，每隔30秒检查一次，超时5秒，连续失败3次则标记为不健康
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD wget --spider -q http://127.0.0.1:9999/healthCheck || exit 1
