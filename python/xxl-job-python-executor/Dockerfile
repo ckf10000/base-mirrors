@@ -39,6 +39,7 @@ COPY --from=build ${LOCAL_PKG} ${LOCAL_PKG}
 COPY --from=build $WORKDIR $WORKDIR
 
 # 安装运行所需的系统库
+RUN apt-get update && apt-get install -y curl wget
 RUN ln -sf ${LOCAL_PKG}/bin/* /usr/local/bin/
 
 
