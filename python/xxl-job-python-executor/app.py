@@ -57,8 +57,7 @@ async def log(request: web.Request) -> web.Response:
 
 @routes.get("/healthCheck")
 async def health_check(request: web.Request) -> web.Response:
-    data = await request.json()
-    return web.json_response({"code": 200, "msg": "当前系统状态良好", "data": data})
+    return web.json_response({"code": 200, "msg": "当前系统状态良好", "data": None})
 
 
 class LogResponse(TypedDict):
