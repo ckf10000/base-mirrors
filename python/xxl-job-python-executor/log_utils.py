@@ -191,7 +191,7 @@ def hacked_setup_logging(path: str, name: str, level: int = _logging.INFO) -> _l
     # =========================
     # 5️⃣ 三方库日志
     # =========================
-    for name in ["asyncio", "urllib3", "requests", "charset_normalizer", "playwright", "root"]:
+    for name in ["aiohttp", "urllib3", "requests", "charset_normalizer", "playwright", "root"]:
         log = _logging.getLogger(name)
         log.setLevel(level)  # 降低这些库的日志级别
         if console_handler not in log.handlers:
