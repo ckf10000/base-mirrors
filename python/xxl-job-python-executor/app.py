@@ -239,28 +239,28 @@ def load_job_module(module_path):
             handlers_dict = job_handler._handlers
 
             if isinstance(handlers_dict, dict):
-                logger.info(f"[pyxxl] 当前注册的任务数量: {len(handlers_dict)}")
+                logger.info(f"当前注册的任务数量: {len(handlers_dict)}")
 
                 if module_name in handlers_dict:
                     # 保存旧处理器信息（用于调试）
                     old_handler = handlers_dict[module_name]
-                    logger.info(f"[pyxxl] 旧处理器信息: {type(old_handler)}")
+                    logger.info(f"旧处理器信息: {type(old_handler)}")
 
                     # 取消注册
                     del handlers_dict[module_name]
-                    logger.info(f"[pyxxl] ✓ 已取消注册任务: {module_name}")
+                    logger.info(f"✓ 已取消注册任务: {module_name}")
 
                     # 验证取消注册
                     if module_name not in handlers_dict:
-                        logger.info(f"[pyxxl] ✓ 取消注册验证成功")
+                        logger.info(f"✓ 取消注册验证成功")
                     else:
-                        logger.error(f"[pyxxl] ✗ 取消注册验证失败")
+                        logger.error(f"✗ 取消注册验证失败")
                 else:
-                    logger.info(f"[pyxxl] 任务 {module_name} 未注册，直接进行新注册")
+                    logger.info(f"任务 {module_name} 未注册，直接进行新注册")
             else:
-                logger.warning(f"[pyxxl] _handlers 不是字典: {type(handlers_dict)}")
+                logger.warning(f"_handlers 不是字典: {type(handlers_dict)}")
         else:
-            logger.warning(f"[pyxxl] 无法找到任务字典，跳过取消注册步骤")
+            logger.warning(f"无法找到任务字典，跳过取消注册步骤")
 
         # 步骤2：卸载模块
         if module_path in sys.modules:
@@ -271,12 +271,12 @@ def load_job_module(module_path):
             if hasattr(old_module, '__pyxxl_cleanup__'):
                 try:
                     old_module.__pyxxl_cleanup__()
-                    logger.info(f"[pyxxl] 执行模块清理函数")
+                    logger.info(f"执行模块清理函数")
                 except Exception as e:
-                    logger.warning(f"[pyxxl] 模块清理失败: {e}")
+                    logger.warning(f"模块清理失败: {e}")
 
             del sys.modules[module_path]
-            logger.info(f"[pyxxl] ✓ 已卸载模块: {module_path}")
+            logger.info(f"✓ 已卸载模块: {module_path}")
 
         # 步骤3：清除导入缓存
         importlib.invalidate_caches()
@@ -291,17 +291,17 @@ def load_job_module(module_path):
             # 检查注册函数是否可调用
             if callable(module.register):
                 module.register(executor)
-                logger.info(f"[pyxxl] ✓ 成功调用 register 函数")
+                logger.info(f"✓ 成功调用 register 函数")
 
                 # 步骤6：验证注册结果
                 if hasattr(job_handler, '_handlers') and isinstance(job_handler._handlers, dict):
                     if module_name in job_handler._handlers:
                         new_handler = job_handler._handlers[module_name]
-                        logger.info(f"[pyxxl] ✓ 任务注册成功，新处理器: {type(new_handler)}")
+                        logger.info(f"✓ 任务注册成功，新处理器: {type(new_handler)}")
                     else:
-                        logger.error(f"[pyxxl] ✗ 任务注册失败，任务未出现在处理器字典中")
+                        logger.error(f"✗ 任务注册失败，任务未出现在处理器字典中")
                 else:
-                    logger.warning(f"[pyxxl] 无法验证注册结果")
+                    logger.warning(f"无法验证注册结果")
             else:
                 logger.error(f"register 属性不可调用: {type(module.register)}")
         else:
